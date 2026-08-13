@@ -395,6 +395,45 @@
      :keys-scanned (count (distinct (mapcat (comp deep-keys second) surfaces)))
      :hits (vec (sort-by (juxt (comp str :where) (comp str :key)) (distinct hits)))}))
 
+(def ^:private probe-approver-context
+  "Approver-shaped keys deliberately injected into a run context by
+  `attribution-control-probe`. Three spellings, so the probe does not
+  depend on guessing the one name a future fix would choose."
+  {:approver "vet-tanaka"
+   :approved-by "vet-tanaka"
+   :approval-note "signed off after barn walk"})
+
+(defn attribution-control-probe
+  "A finding of zero approver keys is ambiguous on its own: it agrees
+  equally with `this actor drops the approver` and with `no approver was
+  ever supplied`. So supply one.
+
+  This drives one additional CLEAN, COMMITTING run through the same real
+  actor with `probe-approver-context` merged into the context, then looks
+  for those keys on the way out. Whether they survive is MEASURED here,
+  not read off `operation.cljc` — if `commit-record` is later changed to
+  retain the approver, this probe reports `:retained? true` and the page
+  stops claiming otherwise.
+
+  Returns `{:disposition d :supplied #{..} :survived #{..}
+  :retained? bool}`."
+  []
+  (let [st (seed-store)
+        actor (operation/build st)
+        context (merge {:actor-id operator-id :role :farm-operator :phase :phase-2}
+                       probe-approver-context)
+        result (actor {:op :log-flock-record :facility-id (fid 0)
+                       :count 24000 :health-status "healthy"}
+                      context)
+        emitted (concat (:audit result) (when-let [r (:record result)] [r]))
+        seen (into #{} (filter keyword?) (mapcat deep-keys emitted))
+        supplied (into (sorted-set) (keys probe-approver-context))
+        survived (into (sorted-set) (filter seen) supplied)]
+    {:disposition (:disposition result)
+     :supplied supplied
+     :survived survived
+     :retained? (boolean (seq survived))}))
+
 (defn payload-divergence
   "Measured, not asserted: does `commit-record` put different data in
   `:value` and `:payload`?"
@@ -607,7 +646,8 @@
 
 (defn- attribution-section [run-data]
   (let [att (attribution-scan run-data)
-        div (payload-divergence run-data)]
+        div (payload-divergence run-data)
+        probe (attribution-control-probe)]
     (section
      "Who approved it? — attribution scan"
      (str "Computed at render time by <code>poultryops.render-html/attribution-scan</code>, which walks every "
@@ -623,8 +663,37 @@
                         (klass "ok" (esc (count (:hits att)))))))
              (row (td (str "committed records where " (code ":value") " and " (code ":payload") " differ"))
                   (td (esc (:divergent div)) " of " (esc (:records div))))])
+
+     ;; A zero above is ambiguous by itself. The control probe removes the
+     ;; ambiguity by SUPPLYING an approver and re-measuring.
+     "    <h3>Control probe — was an approver ever offered?</h3>\n"
+     (str "    <p class=\"muted\">A count of zero agrees just as well with &ldquo;the actor drops the approver&rdquo; "
+          "as with &ldquo;no approver was ever supplied&rdquo;. So "
+          "<code>poultryops.render-html/attribution-control-probe</code> supplies one: it drives one extra "
+          "clean, committing run through the same real actor with these keys merged into the context, and "
+          "re-reads the facts and record that came back. The verdict below is measured on that run, not read "
+          "off <code>operation.cljc</code>.</p>\n")
+     (table nil ["Probe" "Result"]
+            [(row (td "keys injected into the run context")
+                  (td (str/join ", " (map kwcode (:supplied probe)))))
+             (row (td "disposition of the probe run") (td (kwcode (:disposition probe))))
+             (row (td "of those keys, how many survived into the fact or record")
+                  (td (if (:retained? probe)
+                        (klass "ok" (esc (count (:survived probe))) " of " (esc (count (:supplied probe))))
+                        (klass "err" "0 of " (esc (count (:supplied probe)))))))])
+     (if (:retained? probe)
+       (str "    <p class=\"ok\"><strong>The approver IS retained.</strong> Surviving keys: "
+            (str/join ", " (map kwcode (:survived probe)))
+            ". The attribution above should be read as authoritative.</p>\n")
+       (str "    <p class=\"err\"><strong>The approver is dropped.</strong> Every key above was supplied on the "
+            "context of a run that committed, and none of them appears on the emitted fact or on the returned "
+            "record. <code>poultryops.operation/commit-record</code> takes the context as <code>_context</code> "
+            "and never reads it; <code>commit-fact</code> reads only <code>(:actor-id context)</code>, which is "
+            "the EXECUTING actor. So approver attribution here is "
+            "<strong>audit only &mdash; not retained in the record</strong>.</p>\n"))
+
      (if (empty? (:hits att))
-       (str "    <p class=\"err\"><strong>No approver is recorded anywhere in this run.</strong> "
+       (str "    <p class=\"err\">Consistent with the probe, no approver is recorded anywhere in the main run. "
             "The Governor and the rollout phase both hand decisions to a human by emitting an "
             (code ":approval-requested") " fact — but nothing in this repo consumes one. There is no "
             "resume, approve or deny entry point, and <code>poultryops.operation/commit-record</code> "
@@ -645,7 +714,7 @@
 ;; ───────────────────────────── render ─────────────────────────────
 
 (defn render [run-data]
-  (let [{:keys [ledger runs]} run-data]
+  (let [{:keys [ledger]} run-data]
     (str
      "<!doctype html>\n"
      "<html lang=\"ja\"><head><meta charset=\"utf-8\">"
