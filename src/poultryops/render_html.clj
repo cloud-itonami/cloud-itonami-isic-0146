@@ -415,8 +415,15 @@
   retain the approver, this probe reports `:retained? true` and the page
   stops claiming otherwise.
 
+  The probe can only answer the question if its run actually COMMITS: a
+  held or escalated run produces no `:record` at all, and would report
+  zero surviving keys for the trivial reason that there was nothing to
+  survive into — the same zero a real drop produces. So the commit is
+  checked, and a non-commit yields `:conclusive? false` rather than a
+  verdict the probe did not earn.
+
   Returns `{:disposition d :supplied #{..} :survived #{..}
-  :retained? bool}`."
+  :retained? bool :conclusive? bool :record? bool}`."
   []
   (let [st (seed-store)
         actor (operation/build st)
@@ -425,14 +432,20 @@
         result (actor {:op :log-flock-record :facility-id (fid 0)
                        :count 24000 :health-status "healthy"}
                       context)
-        emitted (concat (:audit result) (when-let [r (:record result)] [r]))
+        record (:record result)
+        emitted (concat (:audit result) (when record [record]))
         seen (into #{} (filter keyword?) (mapcat deep-keys emitted))
         supplied (into (sorted-set) (keys probe-approver-context))
-        survived (into (sorted-set) (filter seen) supplied)]
+        survived (into (sorted-set) (filter seen) supplied)
+        committed? (= :commit (:disposition result))]
     {:disposition (:disposition result)
      :supplied supplied
      :survived survived
-     :retained? (boolean (seq survived))}))
+     :retained? (boolean (seq survived))
+     :record? (boolean record)
+     ;; No commit and no record => nothing was ever offered a place to be
+     ;; retained, so "0 survived" would not mean "dropped".
+     :conclusive? (boolean (and committed? record))}))
 
 (defn payload-divergence
   "Measured, not asserted: does `commit-record` put different data in
@@ -676,20 +689,43 @@
      (table nil ["Probe" "Result"]
             [(row (td "keys injected into the run context")
                   (td (str/join ", " (map kwcode (:supplied probe)))))
-             (row (td "disposition of the probe run") (td (kwcode (:disposition probe))))
+             (row (td "disposition of the probe run")
+                  (td (kwcode (:disposition probe))
+                      " "
+                      (if (:conclusive? probe)
+                        (muted "committed, so a record existed for the key to survive into")
+                        (klass "err" "did NOT commit — the probe cannot answer"))))
+             (row (td (str "commit record returned by " (code "run-operation")))
+                  (td (if (:record? probe)
+                        (klass "ok" "present")
+                        (klass "err" "absent"))))
              (row (td "of those keys, how many survived into the fact or record")
-                  (td (if (:retained? probe)
+                  (td (cond
+                        (not (:conclusive? probe))
+                        (klass "err" "inconclusive")
+                        (:retained? probe)
                         (klass "ok" (esc (count (:survived probe))) " of " (esc (count (:supplied probe))))
+                        :else
                         (klass "err" "0 of " (esc (count (:supplied probe)))))))])
-     (if (:retained? probe)
+     (cond
+       (not (:conclusive? probe))
+       (str "    <p class=\"err\"><strong>Inconclusive — this probe did not earn a verdict.</strong> Its run "
+            "did not commit, so no record was produced and there was nowhere for an approver key to be "
+            "retained. Zero surviving keys would therefore mean nothing here. Reported as inconclusive rather "
+            "than reported as a drop, because a check that could not run must not return the same answer as a "
+            "check that ran and found a problem.</p>\n")
+
+       (:retained? probe)
        (str "    <p class=\"ok\"><strong>The approver IS retained.</strong> Surviving keys: "
             (str/join ", " (map kwcode (:survived probe)))
             ". The attribution above should be read as authoritative.</p>\n")
+
+       :else
        (str "    <p class=\"err\"><strong>The approver is dropped.</strong> Every key above was supplied on the "
-            "context of a run that committed, and none of them appears on the emitted fact or on the returned "
-            "record. <code>poultryops.operation/commit-record</code> takes the context as <code>_context</code> "
-            "and never reads it; <code>commit-fact</code> reads only <code>(:actor-id context)</code>, which is "
-            "the EXECUTING actor. So approver attribution here is "
+            "context of a run that committed and returned a record, and none of them appears on the emitted "
+            "fact or on that record. <code>poultryops.operation/commit-record</code> takes the context as "
+            "<code>_context</code> and never reads it; <code>commit-fact</code> reads only "
+            "<code>(:actor-id context)</code>, which is the EXECUTING actor. So approver attribution here is "
             "<strong>audit only &mdash; not retained in the record</strong>.</p>\n"))
 
      (if (empty? (:hits att))

@@ -2614,11 +2614,12 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
       <thead><tr><th>Probe</th><th>Result</th></tr></thead>
       <tbody>
       <tr><td>keys injected into the run context</td><td><code>:approval-note</code>, <code>:approved-by</code>, <code>:approver</code></td></tr>
-      <tr><td>disposition of the probe run</td><td><code>:commit</code></td></tr>
+      <tr><td>disposition of the probe run</td><td><code>:commit</code> <span class="muted">committed, so a record existed for the key to survive into</span></td></tr>
+      <tr><td>commit record returned by <code>run-operation</code></td><td><span class="ok">present</span></td></tr>
       <tr><td>of those keys, how many survived into the fact or record</td><td><span class="err">0 of 3</span></td></tr>
       </tbody>
     </table>
-    <p class="err"><strong>The approver is dropped.</strong> Every key above was supplied on the context of a run that committed, and none of them appears on the emitted fact or on the returned record. <code>poultryops.operation/commit-record</code> takes the context as <code>_context</code> and never reads it; <code>commit-fact</code> reads only <code>(:actor-id context)</code>, which is the EXECUTING actor. So approver attribution here is <strong>audit only &mdash; not retained in the record</strong>.</p>
+    <p class="err"><strong>The approver is dropped.</strong> Every key above was supplied on the context of a run that committed and returned a record, and none of them appears on the emitted fact or on that record. <code>poultryops.operation/commit-record</code> takes the context as <code>_context</code> and never reads it; <code>commit-fact</code> reads only <code>(:actor-id context)</code>, which is the EXECUTING actor. So approver attribution here is <strong>audit only &mdash; not retained in the record</strong>.</p>
     <p class="err">Consistent with the probe, no approver is recorded anywhere in the main run. The Governor and the rollout phase both hand decisions to a human by emitting an <code>:approval-requested</code> fact — but nothing in this repo consumes one. There is no resume, approve or deny entry point, and <code>poultryops.operation/commit-record</code> writes only <code>(:value proposal)</code>, into both <code>:value</code> and <code>:payload</code>. An escalated proposal therefore leaves no trace of who, if anyone, signed it. Disclosed here rather than patched, because fixing it is a change to the actor's approval workflow, not to a renderer.</p>
     <p class="muted">Keys deliberately <em>excluded</em> from the approver-shaped set, and why — each of these would agree with the truth on some data while being wrong:</p>
     <table>
