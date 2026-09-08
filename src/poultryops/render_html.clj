@@ -88,7 +88,7 @@
   Determinism: no timestamps, no UUIDs, no randomness, no network. Every
   enumeration over a map is explicitly sorted. Re-running writes a
   byte-identical file."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [jp-go-dds.skin]
             [poultryops.advisor :as advisor]
             [poultryops.facts :as facts]
@@ -368,7 +368,7 @@
    :basis "for a hold, the rule keywords; for a commit, the advisor's :cites"})
 
 (defn- approver-shaped? [k]
-  (let [n (str/lower-case (name k))]
+  (let [n (str/lower (name k))]
     (boolean (some #(str/includes? n %) approver-key-patterns))))
 
 (defn- deep-keys [x]
