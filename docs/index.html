@@ -2463,7 +2463,7 @@ code { font-family: var(--font-family-mono); background: var(--color-neutral-sol
         <div class="pf-pitch">
           <p>Open Occupation Blueprint for ISIC Rev. 4 0146: Raising of poultry.</p>
           <p>This repository implements a forkable OSS poultry-farm operations coordinator: a facility-management and record-keeping robot manages flock logging (including mortality and egg-production data), veterinary appointment scheduling, and supply procurement under a governor-gated actor, so a broiler or layer operation keeps its own operational records and maintains full transparency over decisions.</p>
-          <p>Maturity: :implemented. src/poultryops/ implements the PoultryOpsAdvisor (poultryops.advisor) and the independent PoultryFarmOperationsGovernor (poultryops.governor), composed by poultryops.operation following the itonami actor pattern (ADR-2607011000): advise -&gt; govern -&gt; phase-gate -&gt; commit | escalate | hold. See clojure -M:test output for the current test/assertion count.</p>
+          <p>Maturity: :implemented. src/poultryops/ implements the PoultryOpsAdvisor (poultryops.advisor) and the independent PoultryFarmOperationsGovernor (poultryops.governor), composed by poultryops.operation following the itonami actor pattern (ADR-2607011000): advise -&gt; govern -&gt; phase-gate -&gt; commit | escalate | hold. See kbb -M:test output for the current test/assertion count.</p>
         </div>
       </div>
       <p class="pf-meta">Domain <code>agriculture/poultry-raising</code> · Governor <code>poultry-farm-operations-governor</code> · License <code>AGPL-3.0-or-later</code></p>
