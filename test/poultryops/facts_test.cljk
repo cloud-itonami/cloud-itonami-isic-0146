@@ -1,5 +1,5 @@
 (ns poultryops.facts-test
-  (:require [clojure.test :refer [deftest is are testing]]
+  (:require [kotoba.test :refer [deftest is are testing]]
             [poultryops.facts :as facts]))
 
 (deftest supply-category-lookup
