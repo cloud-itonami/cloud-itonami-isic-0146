@@ -88,7 +88,7 @@
   Determinism: no timestamps, no UUIDs, no randomness, no network. Every
   enumeration over a map is explicitly sorted. Re-running writes a
   byte-identical file."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.io :as kio] [kotoba.lang.text :as str]
             [jp-go-dds.skin]
             [poultryops.advisor :as advisor]
             [poultryops.facts :as facts]
@@ -917,8 +917,8 @@
       (throw (ex-info "audit facts this renderer cannot classify — refusing to write a console with silent rows"
                       {:count (count unclassified)
                        :types (vec (distinct (map :t unclassified)))})))
-    (let [f (java.io.File. ^String out)]
-      (when-let [p (.getParentFile f)] (.mkdirs p))
+    (let [f (kio/file ^String out)]
+      (when-let [p (kio/parent-file f)] (kio/mkdirs p))
       (spit f (render run-data)))
     (println "wrote" out
              (str "(" (count (:runs run-data)) " scenarios, "
