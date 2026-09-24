@@ -1,0 +1,33 @@
+;; What this vertical's robot physically does, declared for
+;; kotoba.robotics.process (kotoba-lang/robotics). `kbb -M:dev:physics` runs it.
+;;
+;; README "Robotics premise": a facility-management robot keeps flock records
+;; (including mortality and egg production), schedules appointments and
+;; handles supplies for a poultry farm (ISIC 0146). Its physical work: wheeling
+;; stacked egg trays from the collection belt to the egg room, and keeping the
+;; nipple-drinker lines supplied evenly.
+;;
+;; Every number without a cited source is marked `estimate` in its :basis.
+;; Replacing an estimate with a sourced value is this bot's growth work.
+{:physics/schema "itonami.physical-ai.spec.v1"
+ :repo "cloud-itonami/cloud-itonami-isic-0146"
+ :cases
+ [{:id :egg-trolley-to-egg-room
+   :kind :transport
+   :procedure "egg trolley robot wheels a stack of filled egg trays from the collection belt to the egg room; the stack height sets the load's centre of gravity"
+   :params {:mass-kg 60.0 :payload-kg 90.0 :distance-m 50.0 :v-max-mps 1.0 :a-max-mps2 0.5
+            :brake-decel-mps2 1.5 :drive-force-n 250.0 :crr 0.02
+            :cog-height-m 0.40 :support-half-length-m 0.30 :max-time-s 3600.0}
+   :sweep {:param :payload-cog-height-m :values [0.6 0.9 1.2 1.5 1.8]}
+   :quantity :min-tipover-margin
+   :limit {:min 0.30 :basis "estimate: keep at least 30 % of the longitudinal stability margin under a hard stop"}
+   :boundary {:lo 0.3 :hi 3.0}}
+  {:id :nipple-drinker-line
+   :kind :pipe-flow
+   :procedure "water flows along a 100 m nipple-drinker line from the pressure regulator to the far end of the house"
+   :params {:diameter-m 0.022 :length-m 100.0 :roughness-m 1.5e-6
+            :density-kg-m3 998.0 :viscosity-pa-s 1.0e-3 :pump-efficiency 0.50 :elevation-m 0.0}
+   :sweep {:param :q-m3s :values [1.0e-5 2.0e-5 4.0e-5 6.0e-5 8.0e-5]}
+   :quantity :head-m
+   :limit {:max 0.10 :basis "estimate: head loss along the line held within ~10 cm of water so the far nipples still deliver (line flow per house also estimated)"}
+   :boundary {:lo 5.0e-6 :hi 2.0e-4}}]}
